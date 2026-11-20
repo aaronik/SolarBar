@@ -19,6 +19,9 @@ final class MonitorStore: ObservableObject {
         didSet { menuDisplay.save(to: defaults) }
     }
     @Published private(set) var state = State()
+    @Published private(set) var historyIssue: String?
+    private var archive: HistoryArchive?
+    private var archiveSource: String?
     private var task: Task<Void, Never>?
     private let bluetooth = BluetoothMonitor()
     private let defaults = UserDefaults.standard
@@ -27,7 +30,7 @@ final class MonitorStore: ObservableObject {
     var freshness: TimeInterval { max(12, Double(settings.refresh * 2 + 4)) }
     var isLive: Bool {
         if settings.mode == .bluetooth { return state.error == nil && state.history.last?.value != nil }
-        guard let latest = state.latest else { return false }
+        guard state.history.last?.value != nil, let latest = state.latest else { return false }
         return state.error == nil && state.now.timeIntervalSince(latest.date) <= freshness
     }
 
@@ -63,7 +66,31 @@ final class MonitorStore: ObservableObject {
         task?.cancel()
         let config = settings
         if config.mode == .bluetooth { bluetooth.start() } else { bluetooth.stop() }
-        if reset { state = State() }
+        let source = HistoryArchive.source(config)
+        if reset || archiveSource != source {
+            state = State()
+            archiveSource = source
+            historyIssue = nil
+            if let source {
+                do {
+                    if archive == nil {
+                        let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                                                    appropriateFor: nil, create: true).appendingPathComponent("SolarBar")
+                        archive = try HistoryArchive(directory: directory)
+                    }
+                    guard let archive else { throw CocoaError(.fileReadUnknown) }
+                    let now = Date()
+                    var saved = try archive.load(source: source, at: now)
+                    let latest = saved.last { $0.value != nil }
+                    if saved.last?.value != nil {
+                        let gap = Reading(date: now, value: nil)
+                        saved.append(gap)
+                        try archive.append(gap, source: source)
+                    }
+                    state = State(now: now, history: saved, latest: latest)
+                } catch { historyIssue = "Could not restore local chart history: " + error.localizedDescription }
+            }
+        }
         if config.demo && state.history.isEmpty {
             let now = Date()
             let history = stride(from: (300 / config.refresh) * config.refresh, through: 0, by: -config.refresh).map {
@@ -105,7 +132,8 @@ final class MonitorStore: ObservableObject {
         let error = bluetooth.issue
         let anyLive = devices.contains { $0.live(at: now) }
         record(value: anyLive && error == nil ? info.telemetry : nil, error: error,
-               at: now, devices: devices, batteryName: info.batteryName, acName: info.acName)
+               at: now, measuredAt: devices.filter { $0.live(at: now) }.compactMap(\.freshReading).max(),
+               devices: devices, batteryName: info.batteryName, acName: info.acName)
     }
 
     func saveBluetoothKey(_ key: [UInt8], for id: UUID) throws {
@@ -120,9 +148,13 @@ final class MonitorStore: ObservableObject {
         recordBluetooth()
     }
 
-    private func record(value: Telemetry?, error: String?, at now: Date = Date(), devices: [BluetoothDevice] = [],
+    private func record(value: Telemetry?, error: String?, at now: Date = Date(), measuredAt: Date? = nil, devices: [BluetoothDevice] = [],
                         batteryName: String? = nil, acName: String? = nil) {
-        let sample = Reading(date: now, value: value, refresh: settings.refresh)
+        let sample = Reading(date: now, value: value, refresh: settings.refresh, measuredAt: value == nil ? nil : measuredAt ?? now)
+        if let archive, let source = archiveSource {
+            do { try archive.append(sample, source: source) }
+            catch { historyIssue = "Could not save local chart history: " + error.localizedDescription }
+        }
         let history = DashboardHistory.retain(state.history + [sample], at: now)
         state = State(now: now, history: history, error: error, devices: devices,
                       batteryName: batteryName, acName: acName, latest: value == nil ? state.latest : sample)

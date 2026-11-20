@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 @main
 struct Smoke {
@@ -44,8 +45,9 @@ struct Smoke {
         precondition(DashboardHistory.startLabel(3600) == "1 HR AGO")
         precondition(DashboardHistory.retain(mixedHistory, at: now).count == 3)
         precondition(DashboardHistory.retain(mixedHistory, at: now.addingTimeInterval(86401)).isEmpty)
-        let tooMany = (0...4000).map { Reading(date: now.addingTimeInterval(Double($0 - 4000)), value: sample) }
-        precondition(DashboardHistory.retain(tooMany, at: now).count == DashboardHistory.maxSamples)
+        let fullDay = (0...43200).map { Reading(date: now.addingTimeInterval(Double($0 - 43200) * 2), value: sample) }
+        precondition(DashboardHistory.retain(fullDay, at: now).count == fullDay.count)
+        try checkArchiveAndRendering()
         for metric: KeyPath<Telemetry, Double?> in [\.soc, \.batteryPower, \.voltage, \.solar, \.load] {
             let segments = Timeline.segments(mixedHistory, metric: metric, ending: now, window: 3600, maxGap: 8)
             precondition(segments.map(\.count) == [1, 2] && segments.first?.first?.x == 0 && segments.last?.last?.x == 1)
@@ -99,6 +101,47 @@ struct Smoke {
         do { _ = try await GXClient.sample(config(3)); fatalError("silence returned data") }
         catch ModbusError.timeout { }
         print("SolarBar smoke tests passed")
+    }
+    static func checkArchiveAndRendering() throws {
+        let points = [CGPoint(x: 0, y: 1), CGPoint(x: 1, y: 2)]
+        var moves: [CGPoint] = [], lines: [CGPoint] = []
+        ChartLine.path(points).forEach { element in
+            switch element {
+            case .move(let p): moves.append(p)
+            case .line(let p): lines.append(p)
+            default: break
+            }
+        }
+        precondition(moves == [points[0]] && lines == [points[1]])
+        var dense = [CGPoint]()
+        for index in 0..<1000 {
+            let y: CGFloat = index == 503 ? 100 : (index == 504 ? -50 : 0)
+            dense.append(CGPoint(x: CGFloat(index) / 999, y: y))
+        }
+        let reduced = ChartLine.reduced(dense, columns: 20)
+        precondition(reduced.count < 100 && reduced.first == dense.first && reduced.last == dense.last)
+        precondition(reduced.contains(dense[503]) && reduced.contains(dense[504]) && reduced.map(\.x) == reduced.map(\.x).sorted())
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = Date(timeIntervalSince1970: 1700000000)
+        let broadcast = now.addingTimeInterval(-12)
+        let key = HistoryArchive.source(ConnectionSettings(mode: .bluetooth))!
+        let gx = HistoryArchive.source(ConnectionSettings(mode: .gx, host: "gx.local", port: 502))!
+        precondition(HistoryArchive.source(ConnectionSettings(mode: .demo)) == nil && key != gx)
+        do {
+            let db = try HistoryArchive(directory: directory)
+            try db.append(Reading(date: now.addingTimeInterval(-90000), value: Telemetry(soc: 3)), source: key)
+            try db.append(Reading(date: now, value: Telemetry(soc: 50, batteryPower: -82), refresh: 5, measuredAt: broadcast), source: key)
+            try db.append(Reading(date: now.addingTimeInterval(1), value: nil), source: key)
+            try db.append(Reading(date: now, value: Telemetry(soc: 80)), source: gx)
+        }
+        let reopened = try HistoryArchive(directory: directory)
+        let restored = try reopened.load(source: key, at: now.addingTimeInterval(2))
+        precondition(restored.count == 2 && restored[0].value?.batteryPower == -82 && restored[1].value == nil)
+        precondition(restored[0].date == now && restored[0].measuredAt == broadcast && restored[0].refresh == 5)
+        let independent = try reopened.load(source: gx, at: now)
+        precondition(independent.count == 1 && independent[0].value?.soc == 80)
     }
     static func checkBluetooth() throws {
         // Based on public examples from github.com/keshavdv/victron-ble/tree/main/tests,

@@ -74,7 +74,7 @@ final class SolarBarApp: NSObject, NSApplicationDelegate {
         let latest = state.latest
         let value = latest?.value
         let fresh = latest.map { state.now.timeIntervalSince($0.date) <= store.freshness } ?? false
-        let hasCurrent = store.settings.mode == .bluetooth ? state.history.last?.value != nil : fresh
+        let hasCurrent = state.history.last?.value != nil && (store.settings.mode == .bluetooth || fresh)
         let active = state.error == nil && hasCurrent
         let label = active ? (value?.soc.map { "\(Int($0.rounded()))%" } ?? "—") : "—"
         let source: String
@@ -104,7 +104,7 @@ private enum StatusGraph {
 
     static func image(state: MonitorStore.State, window: TimeInterval, gap: TimeInterval,
                       display: MenuDisplay, demo: Bool, active: Bool) -> NSImage {
-        let samples = state.history.filter { state.now.timeIntervalSince($0.date) <= window }
+        let samples = Array(state.history.reversed().prefix { state.now.timeIntervalSince($0.date) <= window }.reversed())
         let ceiling = Timeline.powerCeiling(samples, solar: display.solar, ac: display.ac)
         let sun = display.solar ? Timeline.segments(samples, metric: \.solar, ending: state.now, window: window, maxGap: gap) : []
         let load = display.ac ? Timeline.segments(samples, metric: \.load, ending: state.now, window: window, maxGap: gap) : []

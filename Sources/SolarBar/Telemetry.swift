@@ -52,7 +52,7 @@ struct MenuDisplay: Equatable {
     }
 }
 
-enum InputSource: UInt16, Sendable {
+enum InputSource: UInt16, Codable, Sendable {
     case unknown = 0, grid = 1, generator = 2, shore = 3, disconnected = 240
 
     var title: String {
@@ -66,7 +66,7 @@ enum InputSource: UInt16, Sendable {
     }
 }
 
-struct Telemetry: Sendable {
+struct Telemetry: Codable, Sendable {
     var soc: Double?
     var voltage: Double?
     var current: Double?
@@ -135,19 +135,19 @@ struct Telemetry: Sendable {
     }
 }
 
-struct Reading: Sendable {
+struct Reading: Codable, Sendable {
     let date: Date
     let value: Telemetry?
     var refresh: Int? = nil
+    var measuredAt: Date? = nil
 }
 
 struct DashboardHistory {
     static let maxAge: TimeInterval = 24 * 60 * 60
-    static let maxSamples = 3600
 
     static func retain(_ readings: [Reading], at now: Date) -> [Reading] {
         let first = readings.firstIndex { now.timeIntervalSince($0.date) <= maxAge } ?? readings.endIndex
-        return Array(readings[first...].suffix(maxSamples))
+        return first == 0 ? readings : Array(readings[first...])
     }
 
     static func window(_ readings: [Reading], at now: Date) -> TimeInterval {

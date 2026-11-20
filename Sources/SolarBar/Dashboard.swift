@@ -33,6 +33,9 @@ struct Dashboard: View {
                     .padding(18)
                 } else {
                     VStack(spacing: 12) {
+                        if let issue = store.historyIssue {
+                            Text(issue).font(.caption).foregroundStyle(sun)
+                        }
                         if let error = store.state.error {
                             Label(error, systemImage: "exclamationmark.triangle")
                                 .font(.caption).foregroundStyle(sun)
@@ -287,7 +290,7 @@ struct Dashboard: View {
                     context.stroke(guides, with: .color(rule), lineWidth: 1)
                     for (segments, color) in lines {
                         for segment in segments {
-                            let points = segment.map { point in
+                            let points = ChartLine.reduced(segment, columns: max(1, Int(size.width))).map { point in
                                 CGPoint(x: inset + (size.width - 2 * inset) * point.x,
                                         y: inset + (size.height - 2 * inset) * (1 - min(1, max(0, (point.y - floor) / (ceil - floor)))))
                             }
@@ -295,9 +298,7 @@ struct Dashboard: View {
                             if points.count == 1 {
                                 context.fill(Path(ellipseIn: CGRect(x: first.x - 2, y: first.y - 2, width: 4, height: 4)), with: .color(color))
                             } else {
-                                var path = Path()
-                                path.move(to: first)
-                                path.addLines(Array(points.dropFirst()))
+                                let path = ChartLine.path(points)
                                 context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
                             }
                         }
@@ -361,7 +362,7 @@ struct Dashboard: View {
             if store.settings.demo {
                 Text("Simulated readings")
             } else if let sample = store.state.latest {
-                Text((store.isLive ? "Updated " : "Last seen ") + sample.date.formatted(date: .omitted, time: .standard))
+                Text((store.isLive && isBLE ? "Last broadcast " : store.isLive ? "Updated " : "Last seen ") + (sample.measuredAt ?? sample.date).formatted(date: .omitted, time: .standard))
             } else {
                 Text("No readings yet")
             }
