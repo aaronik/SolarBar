@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>SolarBar</string>
+<key>CFBundleIdentifier</key><string>com.aaron.solarbar</string>
+<key>CFBundleName</key><string>SolarBar</string>
+<key>CFBundleDisplayName</key><string>SolarBar</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleIconFile</key><string>SolarBar</string>
+<key>CFBundleShortVersionString</key><string>0.2.0</string>
+<key>CFBundleVersion</key><string>2</string>
+<key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>LSUIElement</key><true/>
+<key>NSBluetoothAlwaysUsageDescription</key><string>SolarBar listens for nearby Victron Instant Readout broadcasts to show your power readings.</string>
+<key>NSLocalNetworkUsageDescription</key><string>SolarBar reads power telemetry from your Victron GX on your local network.</string>
+</dict></plist>
