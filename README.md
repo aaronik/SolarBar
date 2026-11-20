@@ -7,17 +7,17 @@ A native macOS menu-bar monitor for Victron off-grid power systems, inspired by 
 Requires macOS 13 or later and Swift 6 (Xcode or the Command Line Tools). No third-party app dependencies.
 
 ```sh
-SOLARBAR_SIGN_IDENTITY="<installed Apple signing identity>" ./build.sh
+./build.sh
 open -g build/SolarBar.app
 ```
 
-SolarBar lives in the menu bar, not the Dock. It starts in **Victron Bluetooth** mode by default. To try it without hardware, choose **Settings → Source → Demo** and click **Apply**. The amber dot indicates demo mode. The menu-bar bolt only appears when there’s no visible graph data. For a permanent installation, move the built app to `/Applications`. The local build is signed for use on this Mac, not notarized.
+SolarBar lives in the menu bar, not the Dock. It starts in **Victron Bluetooth** mode by default. To try it without hardware, choose **Settings → Source → Demo** and click **Apply**. The amber dot indicates demo mode. The menu-bar bolt only appears when there’s no visible graph data. For a permanent installation, move the built app to `/Applications`. The build uses ad-hoc signing by default, so no signing certificate is required. It is not notarized.
 
 ### Keep Bluetooth and Keychain approvals across updates
 
-Ad-hoc signing identifies one exact build. If you rebuild with it, macOS can ask again for Bluetooth and for each saved advertisement key, even if you previously clicked **Always Allow**. To keep approvals stable without changing certificate trust settings, use an Apple Development or Developer ID Application signing identity already installed on your Mac. List available identities with `security find-identity -v -p codesigning`, then use `SOLARBAR_SIGN_IDENTITY="<identity name or SHA-1>" ./build.sh`. Keep using the same identity. SolarBar does not install certificates or change trust settings, and the build will not silently fall back to ad-hoc signing.
+Ad-hoc signing identifies one exact build. If you rebuild with it, macOS can ask again for Bluetooth and for each saved advertisement key, even if you previously clicked **Always Allow**. To keep approvals stable without changing certificate trust settings, use an Apple Development or Developer ID Application signing identity already installed on your Mac. List available identities with `security find-identity -v -p codesigning`, then use `SOLARBAR_SIGN_IDENTITY="<identity name or SHA-1>" ./build.sh`. Keep using the same identity. SolarBar does not install certificates or change trust settings, and if you specify an identity that cannot be used, the build fails without replacing the existing app.
 
-When moving from an old ad-hoc build to the consistently signed build, macOS may ask once for Bluetooth and once per existing advertisement key. Use **Always Allow** for the saved keys if you trust the app. Keep launching the same installed copy and rebuild with the same identity afterward. This setup does not delete or export your existing Victron keys. For disposable testing only, `SOLARBAR_SIGN_IDENTITY=- ./build.sh` opts into ad-hoc signing and may cause repeated prompts.
+When moving from an old ad-hoc build to the consistently signed build, macOS may ask once for Bluetooth and once per existing advertisement key. Use **Always Allow** for the saved keys if you trust the app. Keep launching the same installed copy and rebuild with the same identity afterward. This setup does not delete or export your existing Victron keys. Running `./build.sh` without an identity uses ad-hoc signing and may cause repeated prompts.
 
 ## Connect directly over Bluetooth
 
